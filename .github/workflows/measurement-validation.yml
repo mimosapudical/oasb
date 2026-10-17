@@ -1,0 +1,37 @@
+name: Measurement slice validation
+on:
+  push:
+    branches: [validation/raw-network-measurement-20261017]
+permissions:
+  contents: read
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+      - name: Record candidate and validation SHAs
+        run: |
+          git rev-parse HEAD HEAD^
+          git diff --exit-code HEAD^ HEAD -- . ':!.github/workflows/measurement-validation.yml'
+      - run: npm ci --no-audit --no-fund
+      - run: npm run build
+      - run: npm run typecheck:tests
+      - run: npm run check:readme
+      - run: npm run test:scripts
+      - name: Full suite
+        run: npx vitest run --maxWorkers=4 --reporter=default --reporter=json --outputFile=${{ runner.temp }}/measurement-full.json
+      - run: git diff --check HEAD^
+      - name: Release smoke (fresh clone)
+        run: npm run smoke
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: measurement-validation
+          path: ${{ runner.temp }}/measurement-full.json
