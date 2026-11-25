@@ -1,0 +1,36 @@
+name: Paired host control validation
+on:
+  push:
+    branches: [validation/paired-host-controls-20261125]
+permissions:
+  contents: read
+env:
+  ONNXRUNTIME_NODE_INSTALL: skip
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          ref: cd797bbe1634644c05805667f4899e10a6274b7c
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '20'
+          cache: npm
+      - name: Verify the review commit
+        run: |
+          test "$(git rev-parse HEAD)" = cd797bbe1634644c05805667f4899e10a6274b7c
+          test "$(git rev-parse HEAD^)" = 7bf7deb62565b29abd33ebfaa127bf7549931147
+          git diff --check HEAD^ HEAD
+      - run: npm ci --no-audit --no-fund
+      - run: npm run build
+      - run: npm run typecheck:tests
+      - name: Run the scenario under the two control adapters
+        run: node --test --test-name-pattern=AT-NET-002 scripts/adapter-gating.test.mjs
+      - name: Run the network family and reference adapter observations
+        run: npx vitest run src/atomic/network src/harness/arp-observations.test.ts
+      - name: Check a fresh clone including the full suite, counts and package
+        run: npm run smoke
